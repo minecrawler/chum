@@ -5,17 +5,22 @@ use chum::*;
 fn main() {
     // Define segments
     let d2 = Drain::new(
-        |data| println!("(2) {}", data),
+        |data| println!("2nd trans\t{}", data),
         || {},
         || false,
     );
     let mut p2 = Pipe::new(|data| data + 1);
     let mut d1 = Drain::new(
-        |data| println!("(1) {}", data),
+        |data| println!("1st trans\t{}", data),
         || {},
         || false,
     );
     let mut p1 = Pipe::new(|data| data + 1);
+    let mut d0 = Drain::new(
+        |data| println!("No trans\t{}", data),
+        || {},
+        || false,
+    );
     let mut s = Source::new();
 
     // Push anytime
@@ -29,7 +34,11 @@ fn main() {
     p2.pipe(&d2);
     d1.pipe(&p2);
     p1.pipe(&d1);
+    d0.pipe(&p1);
 
     // Connect it to the source in the very end
-    s.pipe(&p1);
+    s.cork();
+    s.pipe(&d0);
+    println!("Sample for a simple stream");
+    s.uncork();
 }
