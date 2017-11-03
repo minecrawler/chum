@@ -6,14 +6,17 @@ use stream::*;
 pub struct Source<'a, T: 'a> {
     buf: LinkedList<T>,
     is_closed: bool,
-    pipe_target: Option<&'a mut WriteableStream<T>>,
+    pipe_target: Option<&'a WriteableStream<T>>,
 }
 
-impl<'a, T> Source<'a, T> {
+impl<'a, T> Source<'a, T>
+where
+    T: Clone {
+
     #[inline]
     pub fn end(&mut self, data: T) {
         if let Some(ref mut ws) = self.pipe_target {
-            ws.write(data);
+            ws.write(&data);
         }
         else {
             self.buf.push_back(data);
@@ -37,7 +40,7 @@ impl<'a, T> Source<'a, T> {
         }
 
         if let Some(ref mut ws) = self.pipe_target {
-            ws.write(data);
+            ws.write(&data);
         }
         else {
             self.buf.push_back(data);
@@ -52,7 +55,10 @@ impl<'a, T> ReadableStream<T> for Source<'a, T> {
     }
 }
 
-impl<'a, T> Stream<'a, T> for Source<'a, T> {
+impl<'a, T> Stream<'a, T> for Source<'a, T>
+where
+    T: Clone {
+
     fn close(&mut self) {
         if self.is_closed {
             panic!("Stream is already closed!");
@@ -66,10 +72,10 @@ impl<'a, T> Stream<'a, T> for Source<'a, T> {
         self.is_closed
     }
 
-    fn pipe<S>(&mut self, stream: &'a mut S)
+    fn pipe<S>(&mut self, stream: &'a S)
     where S: WriteableStream<T> + Stream<'a, T> {
         while let Some(c) = self.read() {
-            stream.write(c);
+            stream.write(&c);
         }
 
         self.pipe_target = Some(stream);

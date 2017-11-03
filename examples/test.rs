@@ -3,13 +3,33 @@ extern crate chum;
 use chum::*;
 
 fn main() {
-    let mut d = Drain::new(|data| println!("{}", data));
-    let mut p = Pipe::new(|data| data + 1);
+    // Define segments
+    let d2 = Drain::new(
+        |data| println!("(2) {}", data),
+        || {},
+        || false,
+    );
+    let mut p2 = Pipe::new(|data| data + 1);
+    let mut d1 = Drain::new(
+        |data| println!("(1) {}", data),
+        || {},
+        || false,
+    );
+    let mut p1 = Pipe::new(|data| data + 1);
     let mut s = Source::new();
 
+    // Push anytime
     s.push(42);
     s.push(17);
-    p.pipe(&mut d);
-    s.pipe(&mut p);
     s.end(7);
+
+    // Build the whole pipeline before connecting it to the source
+    // Alternatively, you can also just cork the source first
+    // and uncork it once you are ready to process chunks
+    p2.pipe(&d2);
+    d1.pipe(&p2);
+    p1.pipe(&d1);
+
+    // Connect it to the source in the very end
+    s.pipe(&p1);
 }

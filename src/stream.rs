@@ -2,10 +2,10 @@ pub trait ReadableStream<T> {
     fn read(&mut self) -> Option<T>;
 }
 
-pub trait Stream<'a, T> {
+pub trait Stream<'a, T: Clone> {
     fn close(&mut self);
     fn closed(&self) -> bool;
-    fn pipe<S>(&mut self, stream: &'a mut S)
+    fn pipe<S>(&mut self, stream: &'a S)
         where S: WriteableStream<T> + Stream<'a, T>;
 }
 
@@ -14,6 +14,6 @@ pub trait TransformStream<T> {
         where F: Fn(T) -> T;
 }
 
-pub trait WriteableStream<T> {
-    fn write(&mut self, data: T);
+pub trait WriteableStream<T: Clone> {
+    fn write(&self, data: &T);
 }
