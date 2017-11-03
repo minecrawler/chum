@@ -5,6 +5,7 @@ use stream::*;
 
 pub struct Source<'a, T: 'a> {
     buf: LinkedList<T>,
+    corked: bool,
     is_closed: bool,
     pipe_target: Option<&'a WriteableStream<T>>,
 }
@@ -29,6 +30,7 @@ where
     pub fn new() -> Self {
         Self {
             buf: LinkedList::new(),
+            corked: false,
             is_closed: false,
             pipe_target: None,
         }
@@ -46,12 +48,38 @@ where
             self.buf.push_back(data);
         }
     }
+
+    fn push_to_pipe(&mut self) {
+        if let Some(ws) = self.pipe_target {
+            while let Some(c) = self.read() {
+                ws.write(&c);
+            }
+        }
+    }
 }
 
-impl<'a, T> ReadableStream<T> for Source<'a, T> {
+impl<'a, T> ReadableStream<T> for Source<'a, T>
+where
+    T: Clone {
+
     #[inline]
+    fn cork(&mut self) {
+        self.corked = true;
+    }
+
+    #[inline]
+    fn corked(&self) -> bool {
+        self.corked
+    }
+
     fn read(&mut self) -> Option<T> {
+        if self.corked { return None; }
         self.buf.pop_front()
+    }
+
+    fn uncork(&mut self) {
+        self.corked = false;
+        self.push_to_pipe();
     }
 }
 
@@ -74,10 +102,9 @@ where
 
     fn pipe<S>(&mut self, stream: &'a S)
     where S: WriteableStream<T> + Stream<'a, T> {
-        while let Some(c) = self.read() {
-            stream.write(&c);
-        }
-
         self.pipe_target = Some(stream);
+        if self.corked { return; }
+
+        self.push_to_pipe();
     }
 }

@@ -1,5 +1,8 @@
 pub trait ReadableStream<T> {
+    fn cork(&mut self);
+    fn corked(&self) -> bool;
     fn read(&mut self) -> Option<T>;
+    fn uncork(&mut self);
 }
 
 pub trait Stream<'a, T: Clone> {
