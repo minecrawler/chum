@@ -1,8 +1,5 @@
-use chunk::Chunk;
-
-
 pub trait ReadableStream<T> {
-    fn read(&mut self) -> Option<Chunk<T>>;
+    fn read(&mut self) -> Option<T>;
 }
 
 pub trait Stream<'a, T> {
@@ -14,7 +11,7 @@ pub trait Stream<'a, T> {
 
 pub trait TransformStream<T> {
     fn transform<F>(&mut self, handler: F)
-        where F: Fn(Chunk<T>) -> Chunk<T>;
+        where F: Fn(T) -> T;
 }
 
 pub trait WriteableStream<T> {

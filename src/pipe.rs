@@ -1,10 +1,9 @@
 use std::collections::LinkedList;
 
-use chunk::Chunk;
 use stream::*;
 
 pub struct Pipe<'a, T: 'a, F: Fn(T) -> T> {
-    buf: LinkedList<Chunk<T>>,
+    buf: LinkedList<T>,
     is_closed: bool,
     pipe_target: Option<&'a mut WriteableStream<T>>,
     transformer: F,
@@ -22,7 +21,7 @@ impl<'a, T, F> Pipe<'a, T, F> where F: Fn(T) -> T {
 }
 
 impl<'a, T, F> ReadableStream<T> for Pipe<'a, T, F> where F: Fn(T) -> T {
-    fn read(&mut self) -> Option<Chunk<T>> {
+    fn read(&mut self) -> Option<T> {
         self.buf.pop_front()
     }
 }
@@ -34,11 +33,6 @@ impl<'a, T, F> Stream<'a, T> for Pipe<'a, T, F> where F: Fn(T) -> T {
         }
 
         self.is_closed = true;
-
-        let last_chunk = self.buf.back_mut();
-        if let Some(c) = last_chunk {
-            c.last = true;
-        }
     }
 
     #[inline]
@@ -49,8 +43,7 @@ impl<'a, T, F> Stream<'a, T> for Pipe<'a, T, F> where F: Fn(T) -> T {
     fn pipe<S>(&mut self, stream: &'a mut S)
     where S: WriteableStream<T> + Stream<'a, T> {
         while let Some(c) = self.read() {
-            stream.write(c.data);
-            if c.last { stream.close(); break; }
+            stream.write(c);
         }
 
         self.pipe_target = Some(stream);
@@ -68,7 +61,7 @@ impl<'a, T, F> WriteableStream<T> for Pipe<'a, T, F> where F: Fn(T) -> T {
             ws.write(data);
         }
         else {
-            self.buf.push_back(Chunk { last: false, data: data });
+            self.buf.push_back(data);
         }
     }
 }

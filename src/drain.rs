@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-//use chunk::Chunk;
 use stream::*;
 
 
