@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use stream::*;
 
-pub struct Drain<'a, T: 'a + Clone, F: Fn(&T), H: Fn(), C: Fn() -> bool> {
+pub struct Drain<'a, T: 'a + Clone, F: Fn(T), H: Fn(), C: Fn() -> bool> {
     close_handler: H,
     closed_checker: C,
     pipe_target: Option<&'a WriteableStream<T>>,
@@ -13,7 +13,7 @@ pub struct Drain<'a, T: 'a + Clone, F: Fn(&T), H: Fn(), C: Fn() -> bool> {
 impl<'a, T, F, H, C> Drain<'a, T, F, H, C>
 where
     T: Clone,
-    F: Fn(&T),
+    F: Fn(T),
     H: Fn(),
     C: Fn() -> bool {
 
@@ -35,7 +35,7 @@ where
 impl<'a, T, F, H, C> Stream<'a, T> for Drain<'a, T, F, H, C>
 where
     T: Clone,
-    F: Fn(&T),
+    F: Fn(T),
     H: Fn(),
     C: Fn() -> bool {
 
@@ -56,14 +56,17 @@ where
 impl<'a, T, F, H, C> WriteableStream<T> for Drain<'a, T, F, H, C>
 where
     T: Clone,
-    F: Fn(&T),
+    F: Fn(T),
     H: Fn(),
     C: Fn() -> bool {
 
-    fn write(&self, data: &T) {
-        (self.writer)(data);
+    fn write(&self, data: T) {
         if let Some(ref ws) = self.pipe_target {
+            (self.writer)(data.clone());
             ws.write(data);
+        }
+        else {
+            (self.writer)(data);
         }
     }
 }

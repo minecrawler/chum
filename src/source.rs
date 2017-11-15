@@ -1,11 +1,10 @@
-use std::collections::LinkedList;
-
 use stream::*;
 
 
 pub struct Source<'a, T: 'a> {
-    buf: LinkedList<T>,
+    buf: Vec<T>,
     corked: bool,
+    data_callback: Option<Box<'a + Fn(&T)>>,
     is_closed: bool,
     pipe_target: Option<&'a WriteableStream<T>>,
 }
@@ -17,10 +16,10 @@ where
     #[inline]
     pub fn end(&mut self, data: T) {
         if let Some(ref mut ws) = self.pipe_target {
-            ws.write(&data);
+            ws.write(data);
         }
         else {
-            self.buf.push_back(data);
+            self.buf.push(data);
         }
 
         self.close();
@@ -29,8 +28,9 @@ where
 
     pub fn new() -> Self {
         Self {
-            buf: LinkedList::new(),
+            buf: Vec::new(),
             corked: false,
+            data_callback: None,
             is_closed: false,
             pipe_target: None,
         }
@@ -41,24 +41,28 @@ where
             panic!("Cannot push to closed source");
         }
 
+        if let Some(ref cb) = self.data_callback {
+            cb(&data);
+        }
+
         if let Some(ref mut ws) = self.pipe_target {
-            ws.write(&data);
+            ws.write(data);
         }
         else {
-            self.buf.push_back(data);
+            self.buf.push(data);
         }
     }
 
     fn push_to_pipe(&mut self) {
         if let Some(ws) = self.pipe_target {
             while let Some(c) = self.read() {
-                ws.write(&c);
+                ws.write(c);
             }
         }
     }
 }
 
-impl<'a, T> ReadableStream<T> for Source<'a, T>
+impl<'a, T> PausableStream for Source<'a, T>
 where
     T: Clone {
 
@@ -72,20 +76,38 @@ where
         self.corked
     }
 
-    fn read(&mut self) -> Option<T> {
-        if self.corked { return None; }
-        self.buf.pop_front()
-    }
-
     fn uncork(&mut self) {
         self.corked = false;
         self.push_to_pipe();
     }
 }
 
+impl<'a, T> ReadableStream<'a, T> for Source<'a, T>
+where
+    T: Clone  {
+
+    fn read(&mut self) -> Option<T> {
+        if self.corked { return None; }
+
+        // todo: is this even performant
+        self.buf.reverse();
+        let item = self.buf.pop();
+        self.buf.reverse();
+
+        item
+    }
+
+    #[inline]
+    fn data<H>(&mut self, handler: H)
+    where H: 'a + Fn(&T) {
+
+        self.data_callback = Some(Box::new(handler));
+    }
+}
+
 impl<'a, T> Stream<'a, T> for Source<'a, T>
 where
-    T: Clone {
+    T: Clone  {
 
     fn close(&mut self) {
         if self.is_closed {

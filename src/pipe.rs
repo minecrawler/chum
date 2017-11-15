@@ -1,29 +1,28 @@
 use stream::*;
 
-pub struct Pipe<'a, T: 'a + Clone, F: Fn(T) -> T> {
+pub struct Pipe<'a, T: 'a + Clone> {
     is_closed: bool,
     pipe_target: Option<&'a WriteableStream<T>>,
-    transformer: F,
+    transformer: Option<Box<'a + Fn(T) -> T>>,
 }
 
-impl<'a, T, F> Pipe<'a, T, F>
+impl<'a, T> Pipe<'a, T>
 where
-    T: Clone,
-    F: Fn(T) -> T {
+    T: Clone {
 
-    pub fn new(transformer: F) -> Self {
+    pub fn new<F>(transformer: F) -> Self
+    where F: 'a + Fn(T) -> T {
         Self {
             is_closed: false,
             pipe_target: None,
-            transformer,
+            transformer: Some(Box::new(transformer)),
         }
     }
 }
 
-impl<'a, T, F> Stream<'a, T> for Pipe<'a, T, F>
+impl<'a, T> Stream<'a, T> for Pipe<'a, T>
 where
-    T: Clone,
-    F: Fn(T) -> T {
+    T: Clone {
 
     fn close(&mut self) {
         if self.is_closed {
@@ -45,19 +44,37 @@ where
     }
 }
 
-impl<'a, T, F> WriteableStream<T> for Pipe<'a, T, F>
+impl<'a, T> TransformableStream<'a, T> for Pipe<'a, T>
 where
-    T: Clone,
-    F: Fn(T) -> T {
+    T: Clone {
 
-    fn write(&self, data: &T) {
+    fn transform (&self, data: T) -> T {
+        if let Some(ref trans) = self.transformer {
+            (trans)(data)
+        }
+        else {
+            data
+        }
+    }
+
+    fn transformer<H>(&mut self, handler: H)
+    where H: 'a + Fn(T) -> T {
+        self.transformer = Some(Box::new(handler));
+    }
+}
+
+impl<'a, T> WriteableStream<T> for Pipe<'a, T>
+where
+    T: Clone {
+
+    fn write(&self, data: T) {
         if self.is_closed {
             panic!("Cannot push to closed stream");
         }
 
-        let data = (self.transformer)(data.clone());
+        let data = self.transform(data);
         if let Some(ref ws) = self.pipe_target {
-            ws.write(&data);
+            ws.write(data);
         }
     }
 }
