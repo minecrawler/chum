@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 mod drain;
 mod pipe;
 mod source;
@@ -11,14 +13,14 @@ pub use segment::{IntoSegment, Segment};
 pub use stream::*;
 
 
-pub struct Chum<'a, T: 'a + WriteableStream<T> + Clone, S: 'a>
-where S: stream::Stream<'a, T> + WriteableStream<T> {
+pub struct Chum<'a, T: 'a + Clone, S: 'a>
+where S: 'a + stream::Stream<'a, T> + WriteableStream<T> {
     pipeline: Vec<Segment<'a, T, S>>,
 }
 
 impl<'a, T, S> Chum<'a, T, S>
 where
-    T: 'a + WriteableStream<T> + Clone,
+    T: 'a + Clone,
     S: 'a + stream::Stream<'a, T> + WriteableStream<T> {
 
     /// Build pipeline and make it start working.
@@ -26,7 +28,22 @@ where
     pub fn build_pipeline(&mut self) {
         if self.pipeline.len() < 2 { return; }
 
-        // /*
+        let mut pipeline = self
+            .pipeline
+            .iter_mut()
+            .peekable()
+        ;
+
+        while let Some(mut cur_seg) = pipeline.next() {
+            let next_seg = pipeline.peek();
+
+            if next_seg.is_none() { break; }
+
+            let next_stream = *Rc::clone(next_seg.unwrap().stream());
+            cur_seg.stream_mut().pipe(&next_stream);
+        }
+
+        /*
         let iter = self
             .pipeline
             .iter_mut()
@@ -78,12 +95,17 @@ where
 
 impl<'a, T, S> WriteableStream<T> for Chum<'a, T, S>
 where
-    T: WriteableStream<T> + Clone,
-    S: stream::Stream<'a, T> + WriteableStream<T> {
+    T: 'a + Clone,
+    S: 'a + stream::Stream<'a, T> + WriteableStream<T>,
+    std::rc::Rc<S>: std::borrow::Borrow<stream::WriteableStream<T>>{
 
     fn write(&self, data: T) {
+        use std::borrow::Borrow;
+
         if let Some(head) = self.pipeline.first() {
-            head.stream().write(data);
+            let stream: &WriteableStream<T> = head.stream().borrow();
+
+            stream.write(data);
         }
     }
 }

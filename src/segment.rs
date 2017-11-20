@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 use drain::Drain;
 use pipe::Pipe;
@@ -20,7 +21,7 @@ where
     S: Stream<'a, T> + WriteableStream<T> {
 
     stream_type: StreamType,
-    stream: S,
+    stream: Rc<S>,
     #[allow(dead_code)]
     l: &'a PhantomData<()>,
     t: PhantomData<T>,
@@ -32,11 +33,11 @@ where
     T: Clone,
     S: Stream<'a, T> + WriteableStream<T> {
 
-    pub fn stream(&self) -> &S {
+    pub fn stream(&self) -> &Rc<S> {
         &self.stream
     }
 
-    pub fn stream_mut(&self) -> &mut S {
+    pub fn stream_mut(&mut self) -> &mut Rc<S> {
         &mut self.stream
     }
 
@@ -51,7 +52,7 @@ where
 
     fn into(self) -> Segment<'a, T, Pipe<'a, T>> {
         Segment {
-            stream: self,
+            stream: Rc::new(self),
             stream_type: StreamType::Transformable,
             l: &PhantomData,
             t: PhantomData,
@@ -68,7 +69,7 @@ where
 
     fn into(self) -> Segment<'a, T, Drain<'a, T, F, H, C>> {
         Segment {
-            stream: self,
+            stream: Rc::new(self),
             stream_type: StreamType::Writeable,
             l: &PhantomData,
             t: PhantomData,
