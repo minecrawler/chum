@@ -1,22 +1,22 @@
+use std::rc::Rc;
+
 use stream::*;
 
 
 pub struct Source<'a, T: 'a> {
     buf: Vec<T>,
-    corked: bool,
+    pub corked: bool,
     data_callback: Option<Box<'a + Fn(&T)>>,
     is_closed: bool,
-    pipe_target: Option<&'a WriteableStream<T>>,
+    pub pipe_target: Option<Rc<WriteableStream<T>>>,
 }
 
-impl<'a, T> Source<'a, T>
-where
-    T: Clone {
+impl<'a, T> Source<'a, T> {
 
     #[inline]
     pub fn end(&mut self, data: T) {
-        if let Some(ref mut ws) = self.pipe_target {
-            ws.write(data);
+        if let Some(ref ws) = self.pipe_target {
+            (*ws).write(data);
         }
         else {
             self.buf.push(data);
@@ -38,33 +38,41 @@ where
 
     pub fn push(&mut self, data: T) {
         if self.is_closed {
-            panic!("Cannot push to closed source");
+            panic!("Cannot push to closed source");// true on so many levels
         }
 
         if let Some(ref cb) = self.data_callback {
             cb(&data);
         }
 
-        if let Some(ref mut ws) = self.pipe_target {
-            ws.write(data);
+        if let Some(ref ws) = self.pipe_target {
+            (*ws).write(data);
         }
         else {
             self.buf.push(data);
         }
     }
 
-    fn push_to_pipe(&mut self) {
-        if let Some(ws) = self.pipe_target {
+    pub fn push_to_pipe(&mut self) {
+        let ws = {
+            let mut r = None;
+            if let Some(ref ws) = self.pipe_target {
+                r = Some(Rc::clone(ws));
+            }
+
+            r
+        };
+
+        if ws.is_some() {
+            let ws = ws.unwrap();
             while let Some(c) = self.read() {
-                ws.write(c);
+                (*ws).write(c);
             }
         }
     }
 }
 
-impl<'a, T> PausableStream for Source<'a, T>
-where
-    T: Clone {
+impl<'a, T> PausableStream for Source<'a, T> {
 
     #[inline]
     fn cork(&mut self) {
@@ -82,9 +90,7 @@ where
     }
 }
 
-impl<'a, T> ReadableStream<'a, T> for Source<'a, T>
-where
-    T: Clone  {
+impl<'a, T> ReadableStream<'a, T> for Source<'a, T> {
 
     fn read(&mut self) -> Option<T> {
         if self.corked { return None; }
@@ -105,9 +111,7 @@ where
     }
 }
 
-impl<'a, T> Stream<'a, T> for Source<'a, T>
-where
-    T: Clone  {
+impl<'a, T> Stream<'a, T> for Source<'a, T> {
 
     fn close(&mut self) {
         if self.is_closed {
@@ -122,8 +126,8 @@ where
         self.is_closed
     }
 
-    fn pipe<S>(&mut self, stream: &'a S)
-    where S: WriteableStream<T> + Stream<'a, T> {
+    fn pipe(&mut self, stream: Rc<'a + WriteableStream<T>>) {
+    //where S: 'a + WriteableStream<T> {
         self.pipe_target = Some(stream);
         if self.corked { return; }
 

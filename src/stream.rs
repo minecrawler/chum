@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+
 pub enum StreamType {
     Readable,
     Transformable,
@@ -19,8 +22,8 @@ pub trait ReadableStream<'a, T> {
 pub trait Stream<'a, T> {
     fn close(&mut self);
     fn closed(&self) -> bool;
-    fn pipe<S>(&mut self, stream: &'a S)
-        where S: WriteableStream<T> + Stream<'a, T>;
+    fn pipe(&mut self, stream: Rc<'a + WriteableStream<T>>);
+    //    where S: 'a + WriteableStream<T>;
 }
 
 pub trait TransformableStream<'a, T> {

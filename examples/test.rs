@@ -1,5 +1,7 @@
 extern crate chum;
 
+use std::rc::Rc;
+
 use chum::*;
 
 fn main() {
@@ -31,14 +33,14 @@ fn main() {
     // Build the whole pipeline before connecting it to the source
     // Alternatively, you can also just cork the source first
     // and uncork it once you are ready to process chunks
-    p2.pipe(&d2);
-    d1.pipe(&p2);
-    p1.pipe(&d1);
-    d0.pipe(&p1);
+    p2.pipe(Rc::new(d2));
+    d1.pipe(Rc::new(p2));
+    p1.pipe(Rc::new(d1));
+    d0.pipe(Rc::new(p1));
 
     // Connect it to the source in the very end
     s.cork();
-    s.pipe(&d0);
+    s.pipe(Rc::new(d0));
     println!("Sample for a simple stream");
     s.uncork();
 }

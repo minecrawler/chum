@@ -1,17 +1,17 @@
+use std::rc::Rc;
+
 use stream::*;
 
-pub struct Pipe<'a, T: 'a + Clone> {
+pub struct Pipe<'a, T: 'a> {
     is_closed: bool,
-    pipe_target: Option<&'a WriteableStream<T>>,
+    pipe_target: Option<Rc<WriteableStream<T>>>,
     transformer: Option<Box<'a + Fn(T) -> T>>,
 }
 
-impl<'a, T> Pipe<'a, T>
-where
-    T: Clone {
+impl<'a, T> Pipe<'a, T> {
 
-    pub fn new<F>(transformer: F) -> Self
-    where F: 'a + Fn(T) -> T {
+    pub fn new<R>(transformer: R) -> Self
+    where R: 'a + Fn(T) -> T {
         Self {
             is_closed: false,
             pipe_target: None,
@@ -20,9 +20,7 @@ where
     }
 }
 
-impl<'a, T> Stream<'a, T> for Pipe<'a, T>
-where
-    T: Clone {
+impl<'a, T> Stream<'a, T> for Pipe<'a, T> {
 
     fn close(&mut self) {
         if self.is_closed {
@@ -38,15 +36,13 @@ where
     }
 
     #[inline]
-    fn pipe<S>(&mut self, stream: &'a S)
-    where S: WriteableStream<T> + Stream<'a, T> {
+    fn pipe(&mut self, stream: Rc<'a + WriteableStream<T>>) {
+    //where S: 'a + WriteableStream<T> {
         self.pipe_target = Some(stream);
     }
 }
 
-impl<'a, T> TransformableStream<'a, T> for Pipe<'a, T>
-where
-    T: Clone {
+impl<'a, T> TransformableStream<'a, T> for Pipe<'a, T> {
 
     fn transform (&self, data: T) -> T {
         if let Some(ref trans) = self.transformer {
@@ -63,9 +59,7 @@ where
     }
 }
 
-impl<'a, T> WriteableStream<T> for Pipe<'a, T>
-where
-    T: Clone {
+impl<'a, T> WriteableStream<T> for Pipe<'a, T> {
 
     fn write(&self, data: T) {
         if self.is_closed {
@@ -74,7 +68,7 @@ where
 
         let data = self.transform(data);
         if let Some(ref ws) = self.pipe_target {
-            ws.write(data);
+            (*ws).write(data);
         }
     }
 }

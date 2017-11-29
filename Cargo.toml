@@ -9,3 +9,7 @@ authors = ["Marco Alka <me@marco-alka.de>"]
 [[example]]
 name = "test"
 path = "examples/test.rs"
+
+[[example]]
+name = "chum"
+path = "examples/chum.rs"
